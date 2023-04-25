@@ -138,8 +138,10 @@ def get_resolutions(max_reso, min_size=256, max_size=1024, tile_size=64):
         height = min(max_size, (max_tile // (width // tile_size)) * tile_size)
         if height < max_height:
             resos.add((int(width), int(height), int(width) * int(height)))
+            print("w x h",width, height, width * height)
         if width < max_width:
             resos.add((int(height), int(width), int(width) * int(height)))
+            print("h x w",width, height, width * height)
 
         size += tile_size
     
@@ -420,12 +422,13 @@ def main(args):
     
     res:int = args.res
     res_min:int = args.res_min
-    resolutions = get_resolutions( (res,res) , res_min, res / res_min * res  )
+    resolutions = get_resolutions( (res,res) , 256, 1024  )
 
-    #print(f"=======================================================")
-    #for i, reso in enumerate(resolutions):
-        #print(f"Resolution{i}\t({reso[0]}x{reso[1]}\t={reso[2]})")
-    #print(f"=======================================================")
+    print(f"=======================================================")
+    for i, reso in enumerate(resolutions):
+        print(f"Resolution{i}\t({reso[0]}x{reso[1]}\t={reso[2]})")
+    print(f"=======================================================")
+    return
     
     image_paths = \
         glob.glob(os.path.join(args.dir_in, "*.jpg")) + \
