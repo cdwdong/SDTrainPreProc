@@ -138,10 +138,8 @@ def get_resolutions(max_reso, min_size=256, max_size=1024, tile_size=64):
         height = min(max_size, (max_tile // (width // tile_size)) * tile_size)
         if height < max_height:
             resos.add((int(width), int(height), int(width) * int(height)))
-            print("w x h",width, height, width * height)
         if width < max_width:
             resos.add((int(height), int(width), int(width) * int(height)))
-            print("h x w",width, height, width * height)
 
         size += tile_size
     
@@ -415,20 +413,19 @@ def image_adjust_size_for_SD(image, image_path, resolutions, expand_snap):
 #=======================================================================================
 
 def subprocess_upscale(s_path_in, s_path_out, denoise_level = 0):
-    subprocess.run(["python", "-m", "waifu2x.cli", "-n", str(denoise_level), "--tta", "-m", "noise_scale", "-i" , s_path_in, "-o", s_path_out])
+    subprocess.run([".\\venv\\Scripts\\python", "-m", "waifu2x.cli", "-n", str(denoise_level), "--tta", "-m", "noise_scale", "-i" , s_path_in, "-o", s_path_out])
     return
 
 def main(args):
     
     res:int = args.res
     res_min:int = args.res_min
-    resolutions = get_resolutions( (res,res) , 256, 1024  )
+    resolutions = get_resolutions( (res,res) , res_min, res / res_min * res  )
 
-    print(f"=======================================================")
-    for i, reso in enumerate(resolutions):
-        print(f"Resolution{i}\t({reso[0]}x{reso[1]}\t={reso[2]})")
-    print(f"=======================================================")
-    return
+    #print(f"=======================================================")
+    #for i, reso in enumerate(resolutions):
+        #print(f"Resolution{i}\t({reso[0]}x{reso[1]}\t={reso[2]})")
+    #print(f"=======================================================")
     
     image_paths = \
         glob.glob(os.path.join(args.dir_in, "*.jpg")) + \
@@ -501,6 +498,25 @@ def main(args):
                 image = image_apply_icc_profile( image )
             else:
                 break
+        # Calculate max_pixels from max_resolution string
+        max_pixels = res * res
+
+        # Calculate current number of pixels
+        current_pixels = image.shape[0] * image.shape[1]
+
+        # Check if the image needs resizing
+        if current_pixels > max_pixels:
+            # Calculate scaling factor
+            scale_factor = max_pixels / current_pixels
+
+            # Calculate new dimensions
+            new_height = int(image.shape[0] * math.sqrt(scale_factor))
+            new_width = int(image.shape[1] * math.sqrt(scale_factor))
+
+            # Resize image
+            # img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+            image = image_downscale(image, new_width, new_height) 
+        
         image.close()
         
         files.add( ( os.path.basename(image_path), result ))
