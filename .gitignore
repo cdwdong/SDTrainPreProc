@@ -2,5 +2,6 @@
 wd14_tagger_model/
 waifu2x/pretrained_models/
 images/
-**/__pycache__/
+__pycache__/
+*.py[cod]
 venv/
