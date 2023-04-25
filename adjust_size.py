@@ -11,6 +11,7 @@ import random
 import tempfile 
 import io
 from enum import Enum
+from typing import Union
 
 from PIL import Image, ImageFilter, ImageCms
 from tqdm import tqdm
@@ -410,6 +411,74 @@ def image_adjust_size_for_SD(image, image_path, resolutions, expand_snap):
         else:
             print(f"\033[95m(Fit but need resize)\033[0m {os.path.basename(image_path)}. image size={image.width} x {image.height} to \033[92m{nw}\033[0m x \033[92m{nh}\033[0m")
             return 11
+        
+
+def resize_image_to_buckets(res, image, image_path, expand_snap):
+    # Set Bucket Size
+    # Select the list of sizes based on the user's choice
+    if res == 768:
+        bucket_sizes = [(320, 1024), (384, 1024), (448, 1024), (512, 1024), (576, 960), (576, 1024),
+                (640, 896), (704, 832), (768, 768), (832,704), (896, 640), (960, 576),
+                (1024, 448), (1024, 512), (1024, 576)]
+    elif res == 512:
+        bucket_sizes = [
+            (256, 640),(256, 768),(256, 832),(256, 896),(256, 960),(256, 1024),(320, 512),(320, 576),
+            (320, 640),(320, 704),(320, 768),(384, 512),(384, 576),(384, 640),(448, 384),(448, 512),(448, 576),
+            (512, 384),(512, 448),(512, 512),(576, 384),(576, 448),(640, 320),(640, 384),(704, 320),
+            (768, 320),(832, 256),(896, 256),(960, 256),(1024, 256)
+        ]
+    else:
+        print("Invalid size choice. Available choices are 512 and 768.")
+        return
+
+    # Calculate max_pixels from max_resolution string
+    max_pixels = res * res
+
+    # get width and height of image
+    target_width, target_height = image.size
+
+    if (target_width, target_height) in bucket_sizes:
+        # not need to resize
+        print("Image is already in the correct bucket size. Skipping fitting to bucket size.")
+        return
+
+    # Calculate current number of pixels
+    current_pixels = target_width * target_height
+
+    # # Check if the image needs resizing
+    # if current_pixels > max_pixels:
+
+    # Calculate scaling factor
+    scale_factor = max_pixels / current_pixels
+
+    # Calculate new dimensions
+    scaled_width = int(target_width * math.sqrt(scale_factor))
+    scaled_height = int(target_height * math.sqrt(scale_factor))
+
+    # Set Canvas Color for expand
+    if args.random_canvas_color == False:
+        color_expand_canvas = (255, 255, 255, 255)        
+    else:
+        color_expand_canvas = get_random_color_for_expand( image )
+
+    # Select the most suitable size based on aspect ratio
+    aspect_ratio = scaled_width / scaled_height
+    best_size = None
+    best_ratio_diff = float('inf')
+    for size in bucket_sizes:
+        ratio_diff = abs(aspect_ratio - (size[0] / size[1]))
+
+        if ratio_diff < best_ratio_diff:
+            best_ratio_diff = ratio_diff
+            best_size = size
+
+    # Resize image
+    image = image_downscale(image, best_size[0], best_size[1])                        
+    best_size_image:Image = ImageExpandCanvas( image , best_size[0], best_size[1], color_expand_canvas, expand_snap )
+    best_size_image.save( os.path.join(args.dir_out, filenameToPNG(image_path)), "png")
+    print(f"Scailed to Best Bucket Size... {best_size_image.size}")
+    return
+
 #=======================================================================================
 
 def subprocess_upscale(s_path_in, s_path_out, denoise_level = 0):
@@ -420,7 +489,8 @@ def main(args):
     
     res:int = args.res
     res_min:int = args.res_min
-    resolutions = get_resolutions( (res,res) , res_min, res / res_min * res  )
+    step = 64
+    resolutions = get_resolutions( (res,res) , res_min, res / res_min * res, step  )
 
     #print(f"=======================================================")
     #for i, reso in enumerate(resolutions):
@@ -497,27 +567,19 @@ def main(args):
                 image.load()
                 image = image_apply_icc_profile( image )
             else:
-                break
-        # Calculate max_pixels from max_resolution string
-        max_pixels = res * res
-
-        # Calculate current number of pixels
-        current_pixels = image.shape[0] * image.shape[1]
-
-        # Check if the image needs resizing
-        if current_pixels > max_pixels:
-            # Calculate scaling factor
-            scale_factor = max_pixels / current_pixels
-
-            # Calculate new dimensions
-            new_height = int(image.shape[0] * math.sqrt(scale_factor))
-            new_width = int(image.shape[1] * math.sqrt(scale_factor))
-
-            # Resize image
-            # img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-            image = image_downscale(image, new_width, new_height) 
+                break   
         
         image.close()
+
+        # fit image to best bucket size
+        adjusted_image = Image.open(os.path.join(args.dir_out, filenameToPNG(image_path)))
+        resize_image_to_buckets(
+            res=res,
+            image=adjusted_image, 
+            image_path=image_path,
+            expand_snap=expand_snap
+        )
+        adjusted_image.close()  
         
         files.add( ( os.path.basename(image_path), result ))
 
